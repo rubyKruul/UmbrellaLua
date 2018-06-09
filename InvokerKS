@@ -1,6 +1,6 @@
 local Invoker = {}
 
-local Invoker.optionEnable = Menu.AddOptionBool({"Hero Specific", "Invoker"}, "Kill Steal", "auto cast sun strike to predicted position to KS", false)
+Invoker.optionEnable = Menu.AddOptionBool({"Hero Specific", "Invoker"}, "Kill Steal", "auto cast sun strike to predicted position to KS", false)
 
 function Invoker.OnUpdate()
     local myHero = Heroes.GetLocal()
