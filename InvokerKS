@@ -1,0 +1,95 @@
+local Invoker = {}
+
+local Invoker.optionEnable = Menu.AddOptionBool({"Hero Specific", "Invoker"}, "Kill Steal", "auto cast sun strike to predicted position to KS", false)
+
+function Invoker.OnUpdate()
+    local myHero = Heroes.GetLocal()
+    if not myHero or NPC.GetUnitName(myHero) ~= "npc_dota_hero_invoker" then return end
+end
+
+--autocast sunstrike to predicted position to KS
+function Invoker.KillSteal(myHero, enemy)
+    if not myHero or not enemy then return false end
+    if not Entity.IsAlive(myHero) then return false end
+
+    local Q = Ability.GetAbilityByName(myHero, "invoker_quas")
+    local W = Ability.GetAbilityByName(myHero, "invoker_wex")
+    local E = Ability.GetAbilityByName(myHero, "invoker_exort")
+    local R = Ability.GetAbilityByName(myHero, "invoker_invoke")
+    if not Q or not W or not E then return false end
+
+    local Q_level = Ability.GetLevel(Q)
+    local W_level = Ability.GetLevel(W)
+    local E_level = Ability.GetLevel(E)
+
+    if NPC.HasItem(myHero, "item_ultimate_scepter", true) then
+        Q_level = Q_level + 1
+        W_level = W_level + 1
+        E_level = E_level + 1
+    end
+
+    local damage_sun_strike = 100 + 62.5 * (E_level - 1)
+
+    local enemyHp = Entity.GetHealth(enemy)
+    local dis = (Entity.GetAbsOrigin(myHero) - Entity.GetAbsOrigin(enemy)):Length()
+    local multiplier = NPC.GetMagicalArmorDamageMultiplier(enemy)
+
+ -- cast sun strike to KS
+    if enemyHp <= damage_sun_strike then
+        local delay = 1.7 -- sun strike has 1.7s delay
+        local pos = Invoker.GetPredictedPosition(enemy, delay)
+        if Invoker.CastSunStrike(myHero, pos) then return true end
+    end
+    return false
+end
+
+function Invoker.GetPredictedPosition(npc, delay)
+    local pos = Entity.GetAbsOrigin(npc);
+    if not NPC.IsRunning(npc) or not delay then return pos end;
+    local totalLatency = (NetChannel.GetAvgLatency(Enum.Flow.FLOW_INCOMING) + NetChannel.GetAvgLatency(Enum.Flow.FLOW_OUTGOING)); 
+    delay = delay + totalLatency;
+
+    local dir = Entity.GetRotation(npc):GetForward():Normalized();
+    local speed = Invoker.GetMoveSpeed(npc);
+
+    return pos + dir:Scaled(speed * delay);
+end;
+
+function Invoker.CastSunStrike(myHero, pos)
+    if not myHero or not pos then return false end
+    if not Utility.IsSuitableToCastSpell(myHero) then return false end
+
+    local invoke = Ability.GetAbilityByName(myHero, "invoker_invoke")
+    if not invoke then return false end
+
+    local sun_strike = Ability.GetAbilityByName(myHero, "invoker_sun_strike")
+    if not sun_strike or not Ability.Contains(sun_strike, NPC.GetMana(myHero) - Ability.GetManaCost(invoke)) then return false end
+
+    -- dont cast sun strike if there are more than one enemy around the position
+    local radius = 175
+    local enemies = NPCs.InRadius(pos, radius, Entity.GetTeamNum(myHero), Enum.TeamType.TEAM_ENEMY)
+    if enemies and #enemies >= 2 then return false end
+
+    if (Invoker.HasInvoked(myHero, sun_strike) or Invoker.PressKey(myHero, "EEER"))
+    and Invoker.ProtectSpell(myHero, sun_strike) then
+        Ability.CastPosition(sun_strike, pos)
+        return true
+    end
+
+    return false
+end
+
+function Invoker.HasInvoked(myHero, spell)
+    if not myHero or not spell then return false end
+
+    local name = Ability.GetAbilityByName(spell)
+    local spell_1 = NPC.GetAbilityByIndex(myHero, 3)
+    local spell_2 = NPC.GetAbilityByIndex(myHero, 4)
+
+    if spell_2 and name == Ability.GetAbilityByName(spell_2) then return true end
+    if spell_1 and name == Ability.GetAbilityByName(spell_1) then return true end
+
+    return false
+end
+
+return Invoker
